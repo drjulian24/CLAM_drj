@@ -1,0 +1,7 @@
+DATA_DIR = “/Volumes/One Touch/dCLAM_test/DATA_DIR”
+RESULTS_DIR = “/Volumes/One Touch/dCLAM_test/results/”
+FEATURES_DIR = “/Volumes/One Touch/dCLAM_test/features/”
+MODEL_DIR = “task_name_s1/”
+CLAM_CSV = “CLAM_dataset.csv”
+PRESET = “preset.csv”
+HEATMAP_YAML = “heatmaps/hm_temp.yaml”

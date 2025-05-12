@@ -19,6 +19,10 @@ from utils.file_utils import save_hdf5
 from dataset_modules.dataset_h5 import Dataset_All_Bags, Whole_Slide_Bag_FP
 from models import get_encoder
 
+##Following imports added by DRJ 05/12/2025
+import torchvision.transforms as transforms
+from neuroFM_HE20x import neuroFM_HE20x
+
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 def compute_w_loader(output_path, loader, model, verbose = 0):
@@ -54,7 +58,9 @@ parser.add_argument('--data_slide_dir', type=str, default=None)
 parser.add_argument('--slide_ext', type=str, default= '.svs')
 parser.add_argument('--csv_path', type=str, default=None)
 parser.add_argument('--feat_dir', type=str, default=None)
-parser.add_argument('--model_name', type=str, default='resnet50_trunc', choices=['resnet50_trunc', 'uni_v1', 'conch_v1'])
+##old code did not have neuroFM_HE20x as an option. DRJ added 5/12/2025
+##parser.add_argument('--model_name', type=str, default='resnet50_trunc', choices=['resnet50_trunc', 'uni_v1', 'conch_v1'])
+parser.add_argument('--model_name', type=str, default='neuroFM_HE20x', choices=['resnet50_trunc', 'uni_v1', 'conch_v1', 'neuroFM_HE20x'])
 parser.add_argument('--batch_size', type=int, default=256)
 parser.add_argument('--no_auto_skip', default=False, action='store_true')
 parser.add_argument('--target_patch_size', type=int, default=224)

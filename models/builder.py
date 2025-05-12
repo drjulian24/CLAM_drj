@@ -5,6 +5,11 @@ from .timm_wrapper import TimmCNNEncoder
 import torch
 from utils.constants import MODEL2CONSTANTS
 from utils.transform_utils import get_eval_transforms
+##below added by DRJ 05/12/2025
+import vision_transformer
+import nn.Module
+from huggingface_hub import PyTorchModelHubMixin
+
 
 def has_CONCH():
     HAS_CONCH = False
@@ -35,7 +40,37 @@ def has_UNI():
     except Exception as e:
         print(e)
     return HAS_UNI, UNI_CKPT_PATH
-        
+
+#neuro_FM class added by DRJ 05/12/2025. As taken from Github documentation of model
+class neuroFM_HE20x(nn.Module, PyTorchModelHubMixin):
+    def __init__(self):
+        super().__init__()
+        vit_kwargs = dict(
+            img_size=224,
+            patch_size=14,
+            init_values=1.0e-05,
+            ffn_layer='swiglufused',
+            block_chunks=4,
+            qkv_bias=True,
+            proj_bias=True,
+            ffn_bias=True,
+        )
+        self.encoder = vision_transformer.__dict__['vit_large'](**vit_kwargs)
+    
+    def forward(self, x):
+        return self.encoder(x)
+    
+#neuroFM check added by DRJ 05/12/2025
+def has_neuroFM_HE20x():
+    try:
+        # Test loading the model (optional, for validation)
+        neuroFM_HE20x.from_pretrained("MountSinaiCompPath/neuroFM_HE20x")
+        ckpt_path = None  # Use None for Hugging Face download
+        return True, ckpt_path
+    except Exception as e:
+        print(f"neuroFM_HE20x not available: {e}")
+        return False, None
+
 def get_encoder(model_name, target_img_size=224):
     print('loading model checkpoint')
     if model_name == 'resnet50_trunc':
@@ -54,14 +89,24 @@ def get_encoder(model_name, target_img_size=224):
         from conch.open_clip_custom import create_model_from_pretrained
         model, _ = create_model_from_pretrained("conch_ViT-B-16", CONCH_CKPT_PATH)
         model.forward = partial(model.encode_image, proj_contrast=False, normalize=False)
-    elif model_name == 'conch_v1_5':
-        try:
-            from transformers import AutoModel
-        except ImportError:
-            raise ImportError("Please install huggingface transformers (e.g. 'pip install transformers') to use CONCH v1.5")
-        titan = AutoModel.from_pretrained('MahmoodLab/TITAN', trust_remote_code=True)
-        model, _ = titan.return_conch()
-        assert target_img_size == 448, 'TITAN is used with 448x448 CONCH v1.5 features'
+    #neuroFM info added by DRJ 05/12/2025
+    elif model_name == 'neuroFM_HE20x':
+        HAS_NEUROFM, NEUROFM_CKPT_PATH = has_neuroFM_HE20x()
+        assert HAS_NEUROFM, 'neuroFM_HE20x is not available'
+        if NEUROFM_CKPT_PATH:
+            model = neuroFM_HE20x()  # Initialize model
+            state_dict = torch.load(NEUROFM_CKPT_PATH)
+            model.load_state_dict(state_dict)
+        else:
+            model = neuroFM_HE20x.from_pretrained("MountSinaiCompPath/neuroFM_HE20x")
+        img_transforms = transforms.Compose([
+            transforms.Resize((target_img_size, target_img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        
+        model.eval()
+
     else:
         raise NotImplementedError('model {} not implemented'.format(model_name))
     
