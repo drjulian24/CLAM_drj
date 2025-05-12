@@ -17,5 +17,9 @@ MODEL2CONSTANTS = {
 	{
 		"mean": OPENAI_MEAN,
 		"std": OPENAI_STD
+	}, 
+    "neuroFM_HE20x":
+    {
+        "mean": (0.485, 0.456, 0.406), "std": (0.229, 0.224, 0.225)
 	}
 }

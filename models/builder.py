@@ -64,7 +64,10 @@ class neuroFM_HE20x(nn.Module, PyTorchModelHubMixin):
 def has_neuroFM_HE20x():
     try:
         # Test loading the model (optional, for validation)
-        neuroFM_HE20x.from_pretrained("MountSinaiCompPath/neuroFM_HE20x")
+        model = neuroFM_HE20x.from_pretrained("MountSinaiCompPath/neuroFM_HE20x")
+        # If the above line doesnt work try this...
+        # model = neuroFM_HE20x.from_pretrained("models/neuroFM_HE20x")
+
         ckpt_path = None  # Use None for Hugging Face download
         return True, ckpt_path
     except Exception as e:
@@ -94,7 +97,7 @@ def get_encoder(model_name, target_img_size=224):
         HAS_NEUROFM, NEUROFM_CKPT_PATH = has_neuroFM_HE20x()
         assert HAS_NEUROFM, 'neuroFM_HE20x is not available'
         if NEUROFM_CKPT_PATH:
-            model = neuroFM_HE20x()  # Initialize model
+            model = neuroFM_HE20x.from_pretrained("MountSinaiCompPath/neuroFM_HE20x") # Initialize model
             state_dict = torch.load(NEUROFM_CKPT_PATH)
             model.load_state_dict(state_dict)
         else:
@@ -104,8 +107,6 @@ def get_encoder(model_name, target_img_size=224):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-        
-        model.eval()
 
     else:
         raise NotImplementedError('model {} not implemented'.format(model_name))
