@@ -10,6 +10,10 @@ import argparse
 import pdb
 import pandas as pd
 from tqdm import tqdm
+# added by DRJ 05/14/2025 for custom mask loading
+from PIL import Image  # ADDED
+import cv2  # ADDED
+from utils.file_utils import save_hdf5
 
 def stitching(file_path, wsi_object, downscale = 64):
 	start = time.time()
@@ -22,11 +26,21 @@ def segment(WSI_object, seg_params = None, filter_params = None, mask_file = Non
 	### Start Seg Timer
 	start_time = time.time()
 	# Use segmentation file
-	if mask_file is not None:
-		WSI_object.initSegmentation(mask_file)
-	# Segment	
-	else:
-		WSI_object.segmentTissue(**seg_params, filter_params=filter_params)
+	##changed by DRJ 05/14/2025 to handle custom masks
+	mask_path = os.path.join(args.mask_dir, f'{slide_id}_mask.png')  # ADDED
+	if os.path.exists(mask_path):  # ADDED
+			mask = load_custom_mask(mask_path, thumbnail_size=(thumbnail.shape[1], thumbnail.shape[0]))  # ADDED
+			coords = compute_patch_coords(wsi.wsi, mask, args.patch_level, args.patch_size, args.step_size)  # ADDED
+		else:  # ADDED
+			print(f'Mask not found for {slide_id}, using default segmentation')  # ADDED
+			wsi.segmentTissue(seg_level=args.seg_level, sthresh=20, mthresh=7, use_otsu=False)  # ADDED
+			coords = ...  # ADDED: Replace with original coordinate computation logic
+	##if mask_file is not None: <--- original
+		##WSI_object.initSegmentation(mask_file) <--- original
+	# Segment	<--- original
+	##else: <--- original
+		##WSI_object.segmentTissue(**seg_params, filter_params=filter_params) <--- original
+	
 
 	### Stop Seg Timers
 	seg_time_elapsed = time.time() - start_time   
@@ -44,6 +58,64 @@ def patching(WSI_object, **kwargs):
 	patch_time_elapsed = time.time() - start_time
 	return file_path, patch_time_elapsed
 
+## This function added by DRJ 05/14/2025
+def load_custom_mask(mask_path, thumbnail_size):
+    """
+    Load custom binary PNG mask and resize to thumbnail size.
+    Args:
+        mask_path: Path to PNG mask (tissue=black/0, background=white/255).
+        thumbnail_size: Tuple (width, height) of WSI thumbnail at seg_level.
+    Returns:
+        mask: Binary NumPy array (1 for tissue, 0 for background).
+    """
+    mask = Image.open(mask_path).convert('L')  # Load as grayscale
+    mask = mask.resize(thumbnail_size, Image.NEAREST)  # Resize to thumbnail size
+    mask = np.array(mask)
+    # Convert to binary: tissue (black/0) -> 1, background (white/255) -> 0
+    mask = (mask == 0).astype(np.uint8)
+    return mask
+
+## This function added by DRJ 05/14/2025
+def compute_patch_coords=compute_patch_coords(wsi, mask, patch_level, patch_size, step_size):
+    """
+    Compute patch coordinates based on custom mask.
+    Args:
+        wsi: OpenSlide WSI object.
+        mask: Binary mask (1 for tissue, 0 for background) at seg_level.
+        patch_level: WSI level for patch extraction.
+        patch_size: Size of patches (e.g., 224).
+        step_size: Step size for patch grid.
+    Returns:
+        coords: List of (x, y) coordinates at patch_level.
+    """
+    level_dim = wsi.level_dimensions[patch_level]
+    downsample = wsi.level_downsamples[patch_level]
+    # Resize mask to patch_level resolution
+    mask_resized = cv2.resize(mask, (level_dim[0], level_dim[1]), interpolation=cv2.INTER_NEAREST)
+    
+    coords = []
+    for y in range(0, level_dim[1], step_size):
+        for x in range(0, level_dim[0], step_size):
+            # Check if patch is mostly tissue (at least 50% tissue pixels)
+            if mask_resized[y:y+patch_size, x:x+patch_size].mean() > 0.5:
+                coords.append((x, y))
+    
+    return coords
+
+## Added by DRJ 05/14/2025 to support custom mask loading
+def initialize_wsi(wsi_path, seg_level):
+    """
+    Initialize WSI and get thumbnail for mask alignment.
+    Args:
+        wsi_path: Path to WSI file.
+        seg_level: Segmentation level (e.g., 6).
+    Returns:
+        wsi: WholeSlideImage object.
+        thumbnail: Thumbnail image at seg_level.
+    """
+    wsi = WholeSlideImage(wsi_path)
+    thumbnail = np.array(wsi.wsi.read_region((0, 0), seg_level, wsi.level_dim[seg_level]).convert('RGB'))
+    return wsi, thumbnail
 
 def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_dir, 
 				  patch_size = 256, step_size = 256, 
@@ -246,6 +318,10 @@ parser.add_argument('--patch_level', type=int, default=0,
 					help='downsample level at which to patch')
 parser.add_argument('--process_list',  type = str, default=None,
 					help='name of list of images to process with parameters (.csv)')
+#Added by DRJ 05/14/2025 to load custom masks
+parser.add_argument('--mask_dir', type=str, help='Directory containing custom PNG masks')
+parser.add_argument('--custom_downsample', type=int, default=1, help='Custom downsample factor')
+parser.add_argument('--seg_level', type=int, default=6, help='Segmentation level for mask')
 
 if __name__ == '__main__':
 	args = parser.parse_args()
@@ -259,6 +335,11 @@ if __name__ == '__main__':
 
 	else:
 		process_list = None
+
+##Added by DRJ 05/14/2025 for more flexibility with importing custom masks
+	if not args.no_auto_skip and os.path.exists(h5_file_path):  # ADDED
+		print(f'Skipped {slide_id} (already processed)')  # ADDED
+		continue  # ADDED
 
 	print('source: ', args.source)
 	print('patch_save_dir: ', patch_save_dir)
